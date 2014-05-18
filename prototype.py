@@ -4,8 +4,9 @@ This file contains code that is to be revised and split in parts later.
 Purely a playground.
 """
 from math import sin, pi, cos, copysign
+from random import randint
 import pyglet
-from pyglet.gl import GL_TRIANGLES
+from pyglet.gl import GL_TRIANGLES, GL_POINTS
 
 __author__ = 'iljich'
 
@@ -14,8 +15,10 @@ class Creep(object):
 
     world = None
 
-    forward_acc = 5
-    rotatory_acc = 0.001
+    forward_acc = 3
+    rotatory_acc = 0.02
+
+    min_speed = 1
 
     def __init__(self, location, rotation, size):
         self.location = location
@@ -23,10 +26,19 @@ class Creep(object):
         self.size = size
         self.speed = [0, 0]
         self.speed_rot = 0
+        self.target = self.location
 
     def move(self):
-        throttle, rotation = self.go_to((1000, 384))
+        target = self.think()
+        throttle, rotation = self.go_to(target)
         self.world.creep_move(self, throttle, rotation)
+
+    def think(self):
+        x, y = self.location
+        xd, yd = self.target
+        if self.size ** 2 >= (x - xd) ** 2 + (y - yd) ** 2:
+            self.target = [randint(200, 824), randint(200, 568)]
+        return self.target
 
     def go_to(self, destination):
         x, y = self.location
@@ -37,9 +49,12 @@ class Creep(object):
         # resulting vector
         xa, ya = xr - xv, yr - yv
         # if we need to speed up - a sign of cos between r and v
-        throttle = self.forward_acc if (xa * xv + ya * yv) >= 0 else 0
+        # TODO: we need to do it gradually
+        throttle = self.forward_acc \
+            if (xa * xv + ya * yv) >= 0 \
+            else self.min_speed
         # if we need to turn left - a sign of sin between r and v
-        rotation = - copysign(self.rotatory_acc, (xa * yv - xv * ya))
+        rotation = copysign(self.rotatory_acc, (xv * ya - xa * yv))
 
         # debugging print, yay!
         print x, y, xv, yv, xd, yd, xr, yr, \
@@ -64,6 +79,14 @@ class Drawer(object):
             ('c3B', (150, 0, 0) * 3)
         )
 
+    def _draw_target(self, creep):
+        x, y = creep.target
+        pyglet.graphics.draw(
+            1, GL_POINTS,
+            ('v2f', (x, y)),
+            ('c3B', (150, 0, 0))
+        )
+
 
 class World(object):
 
@@ -86,6 +109,7 @@ class World(object):
             forward_acc * sin(r) -
             copysign(self.damping_fwd * (creep.speed[1] ** 2), creep.speed[1])
         )
+        # TODO: rotatory speed should be influenced by forward speed
         creep.speed_rot += (
             rotatory_acc -
             copysign(
@@ -114,6 +138,7 @@ def update(dt):
     creep.move()
     world.tick()
     drawer.draw(creep)
+    drawer._draw_target(creep)
 
 pyglet.clock.schedule_interval(update, 1/60.0)
 
